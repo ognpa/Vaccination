@@ -188,9 +188,9 @@ merge_phn_code <- function(imm_data, phn_data) {
       filter(postcode == imm_data$postcode[i]) %>%
       arrange(desc(RATIO))
     #Get the record with the highest ratio and add its PHN code for the imm_data record 
-    imm_data$PHN_code[i] = phn_data$PHN_CODE_2017[1]
+    imm_data$PHN_code[i] = PHNCodes$PHN_CODE[1]
     #In case we want a cleaner version, also store just the PHN_number
-    imm_data$PHN_number[i] = phn_data$PHN_number[1]
+    imm_data$PHN_number[i] = PHNCodes$PHN_number[1]
   }
   
   return(imm_data)
@@ -205,24 +205,50 @@ merge_phn_code <- function(imm_data, phn_data) {
 immunisations_clean <- clean_immunisation_data(immunisations_raw)
 immunisation_classes <- immunisation_groups(immunisations_clean)
 immunisation_data <- add_immunisation_class(immunisations_clean, immunisation_classes)
+```
 
-View(immunisation_data)
-
+```{r}
 #Get Postal Area Code to PHN data and add PHN code to our immunisation data
-phn <- read_csv('raw_data/PostalAreaCodeToPHN.csv')
+phn_2017 <- read_csv('raw_data/PostalAreaCodeToPHN.csv')
 
 #PHN sometimes has 3 digit postcodes while Immunisation_data adds a leading 0 to 3 digit postcodes.
 #Therefore, we add a field to PHN data called 'postcode' which will add a leading zero to any 3 digit postcode
 #All PHN codes are preceeded with 'PHN' at the start of them e.g. PHN701. Let's make another column with just the number called PHN_number.
-phn <- phn %>%
+phn_2017 <- phn_2017 %>%
   mutate(postcode = ifelse(nchar(POA_CODE_2016) == 3, paste("0", POA_CODE_2016, sep=""),POA_CODE_2016)) %>%
-  mutate(PHN_number = sub("PHN", "", PHN_CODE_2017))
+  mutate(PHN_number = sub("PHN", "", PHN_CODE_2017)) %>%
+  rename(PHN_CODE = "PHN_CODE_2017")
+
+immunisation_data_2017 <- filter(immunisation_data, year >= 2016)
+# Beware, this will take a couple of minutes!
+immunisation_data_2017 <- merge_phn_code(immunisation_data_2017, phn_2017)
+
+```
+
+```{r}
+
+#Get Postal Area Code to PHN data and add PHN code to our immunisation data
+phn_2011_2015 <- read_csv('raw_data/PostalAreaCodeToPHN2011to2015.csv')
+
+#PHN sometimes has 3 digit postcodes while Immunisation_data adds a leading 0 to 3 digit postcodes.
+#Therefore, we add a field to PHN data called 'postcode' which will add a leading zero to any 3 digit postcode
+#All PHN codes are preceeded with 'PHN' at the start of them e.g. PHN701. Let's make another column with just the number called PHN_number.
+phn_2015 <- phn_2011_2015 %>%
+  mutate(postcode = ifelse(nchar(POA_CODE_2011) == 3, paste("0", POA_CODE_2011, sep=""),POA_CODE_2011)) %>%
+  mutate(PHN_number = sub("PHN", "", PHN_CODE))
+
+immunisation_data_2015 <- filter(immunisation_data, year < 2016)
 
 # Beware, this will take a couple of minutes!
-immunisation_data <- merge_phn_code(immunisation_data, phn)
+immunisation_data_2015 <- merge_phn_code(immunisation_data_2015, phn_2015)
+```
 
-#We don't need these objects any more
-rm(phn)
+```{r}
+
+immunisation_data <- rbind(immunisation_data_2015, immunisation_data_2017)
+
+View(immunisation_data)
+
 #this is to write the cleaned data into the Vaccination project for us to share in Github
 write_csv(immunisation_data, "cleaned_data/immunisation_data.csv")
 ```
