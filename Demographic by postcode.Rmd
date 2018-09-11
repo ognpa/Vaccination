@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(readr)
 library(dplyr)
-MB_2016_NSW <- read_csv("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/1270055001_mb_2016_nsw_csv/MB_2016_NSW.csv")
+MB_2016_NSW <- read_csv("raw_data/MB_2016_NSW.csv")
 View(MB_2016_NSW)
 glimpse(MB_2016_NSW)
 ```
@@ -24,7 +24,7 @@ glimpse(MB_2016_NSW)
 ## Links: MB --> postalcodes
 
 ```{r}
-POA_2016_AUST <- read_csv("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/1270055003_poa_2016_aust_csv/POA_2016_AUST.csv")
+POA_2016_AUST <- read_csv("raw_data/POA_2016_AUST.csv")
 glimpse(POA_2016_AUST)
 
 SA3_POA <- merge(MB_2016_NSW, POA_2016_AUST, by= "MB_CODE_2016")
