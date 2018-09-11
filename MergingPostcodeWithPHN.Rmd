@@ -1,5 +1,5 @@
 ---
-title: "AIHW2011to2016 - exploring immunisation coverage rates by postcode"
+title: "AIHW2011to2016 - % immunisation coverage rates by postcode and PHN"
 author: "Alex Brooks"
 date: "6 September 2018"
 output: html_document
@@ -46,12 +46,12 @@ clean_immunisation_data <- function(imm_data) {
   #Rename column names to State, Postcode, Year, Age, pc_immun and caution
   imm_clean = rename(imm_clean, postcode = "Postcode", state = "State", year = 'Reporting Year', age = 'Age group', pc_immun ='Percent fully immunised (%)', caution = 'Interpret with caution  (#)')
   
-  #Age has an unnecessary " year" at the end of each entry. Remove everything after the first space so we can treat age as a number 
+  #Age has an unnecessary " year" in text at the end of each entry. Remove everything after the first space so we can treat age as a number, rather than character. 
   imm_clean$age = sub(" .*", "", imm_clean$age)
   #Convert Age to integer
   imm_clean$age = as.integer(imm_clean$age)
   
-  #Year is poorly formatted with either '2016-2017' format or '2016 <d0> 2017' format. Just take the first 4 characters to represent year
+  #Year is poorly formatted with either '2016-2017' format or '2016 <d0> 2017' format. Just take the first 4 characters to represent year.
   imm_clean$year = substr(imm_clean$year, 1, 4)
   #Convert Year to integer format
   imm_clean$year = as.integer(imm_clean$year)
@@ -71,9 +71,7 @@ clean_immunisation_data <- function(imm_data) {
     summarize(mean_age = mean(age, na.rm = TRUE)) %>%
     select(state)
   
-  View(imm_states)
-  
-  #There's some values that mean the same but are typed differently. Let's clean those up
+  #There's some values that mean the same but are typed differently (duplicates). Let's clean those up
   
   #First, replace any whitespace characters in state names to reduce mistyped names. 
   imm_clean$state = gsub("[[:blank:]]","", imm_clean$state)
@@ -118,8 +116,6 @@ immunisation_groups <- function(imm_data) {
   imm_grp$Immun_class <- c(1:nrow(imm_grp))
   #Change the 'NP' Immun_class to 0
   imm_grp$Immun_class[imm_grp$pc_immun == "NP"] <- 0
-  
-  View(imm_grp)
   
   return(imm_grp)
   
@@ -208,7 +204,7 @@ immunisation_data <- add_immunisation_class(immunisations_clean, immunisation_cl
 ```
 
 ```{r}
-#Get Postal Area Code to PHN data and add PHN code to our immunisation data
+#Get Postal Area Code to PHN data from 2017and add PHN code to our immunisation data
 phn_2017 <- read_csv('raw_data/PostalAreaCodeToPHN.csv')
 
 #PHN sometimes has 3 digit postcodes while Immunisation_data adds a leading 0 to 3 digit postcodes.
@@ -247,8 +243,6 @@ immunisation_data_2015 <- merge_phn_code(immunisation_data_2015, phn_2015)
 
 immunisation_data <- rbind(immunisation_data_2015, immunisation_data_2017)
 
-View(immunisation_data)
-
 #this is to write the cleaned data into the Vaccination project for us to share in Github
 write_csv(immunisation_data, "cleaned_data/immunisation_data.csv")
 ```
@@ -256,7 +250,7 @@ write_csv(immunisation_data, "cleaned_data/immunisation_data.csv")
 ##Now, let's learn a little bit more about the data with a few plots
 
 ```{r}
-#Calculate how many percent of each % immunisanied from <70 to 100
+#Calculate how many percent of each % immunised from <70 to 100
 counts_by_year<-immunisation_data %>%
   group_by(year, pc_immun_class) %>%
   summarize(count = n())
@@ -269,8 +263,71 @@ for(i in 1:nrow(counts_by_year)) {
   counts_by_year$pc_immun[i] <- immunisation_classes$pc_immun[immunisation_classes$Immun_class == class_number]
 }
 
+```
+
+```{r}
+# 
+ggplot(data = counts_by_year) +
+  geom_point(mapping = aes(x=count, y=year))+
+  facet_wrap(~pc_immun, nrow = 2)
+
+```
 
 
+```{r}
+  
+  ggplot(data = filter(immunisation_data, year == "2011"), aes(pc_immun)) +
+  geom_bar() +
+  labs(subtitle="Immunisation coverage in 2011", 
+       y="Count", 
+       x="% Immuned", 
+       title="2011 Australia wide")
+```
+
+```{r}
+
+  ggplot(data = filter(immunisation_data, year == "2012"), aes(pc_immun)) +
+  geom_bar() +
+  labs(subtitle="Immunisation coverage in 2012", 
+       y="Count", 
+       x="% Immuned", 
+       title="2012 Australia wide")
+```
+
+```{r}
+  ggplot(data = filter(immunisation_data, year == "2013"), aes(pc_immun)) +
+  geom_bar() +
+  labs(subtitle="Immunisation coverage in 2013", 
+       y="Count", 
+       x="% Immuned", 
+       title="2013 Australia wide")
+```
+
+```{r}
+  ggplot(data = filter(immunisation_data, year == "2014"), aes(pc_immun)) +
+  geom_bar() +
+  labs(subtitle="Immunisation coverage in 2014", 
+       y="Count", 
+       x="% Immuned", 
+       title="2014 Australia wide")
+```
+
+```{r}
+  ggplot(data = filter(immunisation_data, year == "2015"), aes(pc_immun)) +
+  geom_bar() +
+  labs(subtitle="Immunisation coverage in 2015", 
+       y="Count", 
+       x="% Immuned", 
+       title="2015 Australia wide")
+```
+
+```{r}
+  ggplot(data = filter(immunisation_data, year == "2016"), aes(pc_immun)) +
+  geom_bar() +
+  labs(subtitle="Immunisation coverage in 2016", 
+       y="Count", 
+       x="% Immuned", 
+       title="2016 Australia wide")
 ```
 
 
@@ -306,3 +363,4 @@ There is an inherent problem with spatial representation of postcodes since area
 
 
 ## And PHN geographic boundaries change too
+
