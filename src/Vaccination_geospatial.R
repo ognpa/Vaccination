@@ -56,8 +56,8 @@ plot2=leaflet(data = all_old) %>%
   addTiles() %>% 
   addProviderTiles(providers$OpenStreetMap) %>% 
   addPolygons(fill = FALSE, stroke = TRUE, 
-              color = "blue" ) %>%
-  addLegend("bottomright", colors = "blue", labels = "PHN") %>%
+              color = "blue" ) 
+ # addLegend("bottomright", colors = "blue", labels = "PHN") %>%
 addMarkers(all_old, lng = ~longitude, lat = ~latitude,label = ~all_old$PHN_Name)
 plot2
 plot2 %>% addPolygons(
@@ -70,5 +70,38 @@ plot2 %>% addPolygons(
 require(gridExtra)
 grid.arrange(plot1, plot2, ncol=2)
 
+df[,c('PHN code','Percent fully immunised (%)')]
+heatmap(df[,c('PHN code','Percent fully immunised (%)','Reporting Year')])
 
-    
+
+library(httr)
+
+	
+login <- list(
+  last_ym = "201808",
+  REPORT_TYPE = "D",
+  Sel_Month = "9",
+  Sel_year="2018"
+)
+
+content(res)
+res <- POST("http://www9.health.gov.au/cda/source/rpt_1.cfm", body = login, encode = "form", verbose())
+team <- GET("http://kenpom.com/team.php?team=Rice", verbose())
+
+
+
+
+library(rvest)
+form = read_html("http://www9.health.gov.au/cda/source/rpt_1_sel.cfm") %>% html_node("form") %>% html_form()
+f1 <- set_values(form,
+                 last_ym = 201808,
+                 REPORT_TYPE = D,
+                 Sel_Month =9,
+                 Sel_Year=2018)
+f1$url <- url
+cocorahs <- html_session('http://www9.health.gov.au/cda/source/rpt_1_sel.cfm')
+submitted <- submit_form(cocorahs, form) 
+t <- session %>% html_nodes("ta") %>%html_table() 
+
+
+session 
