@@ -8,3 +8,7 @@ length(unique(seifa_df$postcode))
 length(electoral_df$Postcode)
 all_df=merge(seifa_df,electoral_df,by.x='postcode',by.y='Postcode',how='left')
 write.csv(all_df,"~/Downloads/Vaccination/cleaned_data/immunization_with_everything.csv")
+all_df=read.csv("~/Downloads/Vaccination/cleaned_data/immunization_with_everything.csv")
+head(all_df)
+colnames(all_df)
+all_df$postco

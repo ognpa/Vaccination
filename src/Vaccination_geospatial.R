@@ -8,6 +8,7 @@ df=read_excel("/Users/priya/Downloads/immunisationAIW.xlsx",
               skip=11,
               sheet='TAB 2')
 
+unique(df$`Reporting Year`)
 aus$FIRST_PHN_=as.factor(aus$FIRST_PHN_)
 df$`PHN code`=as.factor(df$`PHN code`)
 aus_old$PHN_Code=as.factor(aus_old$PHN_Code)
