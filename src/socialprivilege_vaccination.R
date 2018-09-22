@@ -15,13 +15,18 @@ d<-(prop.table(table(df$Rank.within.Australia...Decile,df$pc_immun),1)*100)
 library(ggplot2)
 head(d)
 
+library(RColorBrewer)
+# create a mosaic plot
+
+
+
 spineplot(as.factor(df$Rank.within.Australia...Decile), as.factor(df$pc_immun))
 library(ggplot2)
 library(vcd)
 
 
 mosaicplot(d,las = 2,     dir = c("h", "v"),
-           color = "skyblue"
+           col=brewer.pal(8,"Set1"),
            ,ylab="Rank within australia",
            xlab="Percentage immunized",
            off=30,main='Social privilege and vaccination',
