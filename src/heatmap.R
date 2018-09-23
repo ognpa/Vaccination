@@ -77,14 +77,14 @@ colnames(all_reqd)
 f<-melt(all_reqd[,-c(1)])
 head(f)
 
-cols <- c(colorRampPalette(c("#e7f0fa", "#c9e2f6", "#95cbee", "#0099dc", "#4ab04a", "#ffd73e"))(10),
-          colorRampPalette(c("#eec73a", "#e29421", "#e29421", "#f05336","#ce472e"), bias=2)(90))
+cols <- c(colorRampPalette(c("#e7f0fa", "#c9e2f6", "#95cbee", "#0099dc", "#4ab04a", "#ffd73e"))(20),
+          colorRampPalette(c("#eec73a", "#e29421", "#e29421", "#f05336","#ce472e"), bias=2)(80))
                              
 a<-ggplot(f, aes((variable), disease, fill=value)) +
   geom_tile(colour="white", size=0.25) + 
   #remove extra space
   scale_y_discrete(expand=c(0,0))+
-  labs(x="Disease",y="Year",title="Notifications of vaccinated diseases in Australia")+
+  labs(y="Disease",x="Year",title="Notifications of vaccinated diseases in Australia")+
   #remove extra space
   #custom breaks on x-axis
   scale_x_discrete(expand=c(0,0))+
@@ -103,10 +103,11 @@ a<-ggplot(f, aes((variable), disease, fill=value)) +
     #remove plot border
     panel.border=element_blank())+
   scale_fill_gradientn(colours=cols, limits=c(0, 0.3),
-                       breaks=seq(0.001, 0.276, by=0.01), 
+                       breaks=seq(0.003, 0.276, by=0.01), 
                        #values=c(0,0.01, 0.02, 0.03,0.04,0.05,0.06,0.07,0.08, 0.09,0.1,0.12,0.15,0.175,0.2,0.25,0.3), 
                        na.value=rgb(192,192,192 ,max=255))+
    theme(axis.text.x = element_text(angle = 90, hjust = 1))
+a
 ggsave("vaccination_notification.png",a)
 
   

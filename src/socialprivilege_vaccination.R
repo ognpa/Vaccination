@@ -31,3 +31,13 @@ mosaicplot(d,las = 2,     dir = c("h", "v"),
            xlab="Percentage immunized",
            off=30,main='Social privilege and vaccination',
            border = "chocolate") 
+
+
+dd<-unique(df[,c('pc_immun','Rank.within.Australia...Decile')])
+
+unique(dd$Rank.within.Australia...Decile)
+d2=na.omit(dd)
+social_priv=ggplot(data=d2, aes(d2$pc_immun)) + geom_histogram(stat='count')+ theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  facet_wrap(~paste('Rank ',d2$Rank.within.Australia...Decile))+  labs(y="Count",x="Percent immunized",title="Social privilege and vaccination")
+ggsave("social_privilege.png",social_priv)
+getwd()
