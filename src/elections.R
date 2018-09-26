@@ -1,4 +1,5 @@
 setwd("/Users/priya/Downloads/Vaccination")
+library(readxl)
 aihw=read_excel("/Users/priya/Downloads/immunisationAIW.xlsx",
               skip=16,
               sheet='TAB 4')
@@ -18,8 +19,8 @@ library(reshape2)
 d2_dash=(melt(d2, id.vars = c("Postcode", "Percent fully immunised (%)")))
 
 
-political_party_df=ggplot(data=d2_dash, aes(d2_dash$`Percent fully immunised (%)`)) + geom_histogram(stat='count')+ theme(axis.text.x = element_text(size=6,angle = 90, hjust = 1))+
-  facet_grid(d2_dash$variable~d2_dash$value)+  labs(y="Count",x="Percent immunized",title="Party elected in 2016 and vaccination")
+political_party_df=ggplot(data=d2_dash, aes(d2_dash$`Percent fully immunised (%)`)) + geom_histogram(stat='count',fill='blue')+ theme(axis.text.x = element_text(size=6,angle = 90, hjust = 1),plot.title = element_text(hjust = 0.5))+
+  facet_grid(d2_dash$variable~d2_dash$value)+  labs(y="Count",x="Percent immunized",title="Party in power and vaccination")
 political_party_df
 
 

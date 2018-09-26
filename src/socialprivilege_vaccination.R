@@ -37,7 +37,9 @@ dd<-unique(df[,c('pc_immun','Rank.within.Australia...Decile')])
 
 unique(dd$Rank.within.Australia...Decile)
 d2=na.omit(dd)
-social_priv=ggplot(data=d2, aes(d2$pc_immun)) + geom_histogram(stat='count')+ theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+social_priv=ggplot(data=d2, aes(d2$pc_immun)) + geom_histogram(stat='count',fill='blue')+ theme(axis.text.x = element_text(angle = 90, hjust = 1),plot.title = element_text(hjust = 0.5))+
   facet_wrap(~paste('Rank ',d2$Rank.within.Australia...Decile))+  labs(y="Count",x="Percent immunized",title="Social privilege and vaccination")
 ggsave("social_privilege.png",social_priv)
 getwd()
+
+social_priv
