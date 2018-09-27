@@ -19,6 +19,9 @@ head(data_wide_dash)
 #Read immunisation data
 aihw=read.csv("/Users/priya/Downloads/Vaccination/cleaned_data/immunisation_data.csv")
 head(aihw)
+
+
+
 aihw$postcode<-as.factor(aihw$postcode)
 
 
