@@ -3,7 +3,8 @@ all_seifa$postcode=as.factor(all_seifa$postcode)
 
 head(all_seifa)
 str(all_seifa)
-ignore_cols=c('pc_immun','caution','pc_immun_class','Time','PHN_number','state','PHN_code','age','PHN_number')
+ignore_cols=c('pc_immun','caution','pc_immun_class','Time',
+              'PHN_number','state','PHN_code','PHN_number')
 colnames(all_seifa)
 d<-all_seifa[ , -which(names(all_seifa) %in% ignore_cols)]
 head(d)
@@ -46,4 +47,10 @@ pred <- predict(fit, test_sparse,type="response",s=fit$lambda.min)
 prediction <- ifelse(pred >= 0.9, 1, 0) 
 table(prediction)
 confusionMatrix(as.factor(prediction),as.factor(test_y))
+library(ROCR)
+
+ROCRpred <- prediction(pred, test_y)
+ROCRperf <- performance(ROCRpred, 'tpr','fpr')
+plot(ROCRperf, colorize = TRUE, text.adj = c(-0.2,1.7))
+ROCRperf
 
