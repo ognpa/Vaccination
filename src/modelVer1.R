@@ -9,7 +9,7 @@ all_seifa$postcode=as.factor(all_seifa$postcode)
 
 head(all_seifa)
 str(all_seifa)
-ignore_cols=c('pc_immun','caution','pc_immun_class','Time',  'PHN_number','state','PHN_code','PHN_number','X')
+ignore_cols=c('pc_immun','caution','pc_immun_class','Time',  'PHN_number','state','X')
 colnames(all_seifa)
 d<-all_seifa[ , -which(names(all_seifa) %in% ignore_cols)]
 all_seifa=d
@@ -30,8 +30,8 @@ test$src='test'
 all=rbind(train,test)
 colnames(all)
 
-train1=all[all$src=='train',-c(44,45)]
-test1=all[all$src=='test',-c(44,45)]
+train1=all[all$src=='train',-c(46,45)]
+test1=all[all$src=='test',-c(46,45)]
 
 train_y=all[all$src=='train','target']
 test_y=all[all$src=='test','target']
