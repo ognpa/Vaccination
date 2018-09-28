@@ -15,14 +15,31 @@ d<-(prop.table(table(df$Rank.within.Australia...Decile,df$pc_immun),1)*100)
 library(ggplot2)
 head(d)
 
+library(RColorBrewer)
+# create a mosaic plot
+
+
+
 spineplot(as.factor(df$Rank.within.Australia...Decile), as.factor(df$pc_immun))
 library(ggplot2)
 library(vcd)
 
 
 mosaicplot(d,las = 2,     dir = c("h", "v"),
-           color = "skyblue"
+           col=brewer.pal(8,"Set1"),
            ,ylab="Rank within australia",
            xlab="Percentage immunized",
            off=30,main='Social privilege and vaccination',
            border = "chocolate") 
+
+
+dd<-unique(df[,c('pc_immun','Rank.within.Australia...Decile')])
+
+unique(dd$Rank.within.Australia...Decile)
+d2=na.omit(dd)
+social_priv=ggplot(data=d2, aes(d2$pc_immun)) + geom_histogram(stat='count',fill='blue')+ theme(axis.text.x = element_text(angle = 90, hjust = 1),plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~paste('Rank ',d2$Rank.within.Australia...Decile))+  labs(y="Count",x="Percent immunized",title="Social privilege and vaccination")
+ggsave("social_privilege.png",social_priv)
+getwd()
+
+social_priv

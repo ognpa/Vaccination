@@ -1,0 +1,166 @@
+---
+title: "Try to Modelling"
+author: "Giulia Grossi"
+date: "26 settembre 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Packages upload
+```{r}
+library(readr)
+library(readxl)
+library(dplyr)
+library(ISLR)
+library(tidyr)
+```
+
+# 1. Merging ABS dataset (for BEC)
+Informatio for Bec on merging datasets of ABS _demo and socio 
+```{r}
+##### merging abs_datasets #####
+setwd("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets")
+abs_pop=read.csv("./ABS_REGIONAL_pop.csv", header=TRUE)
+abs_famcom=read.csv("./ABS_REGIONAL_family&community.csv", header=TRUE)
+abs_edu=read.csv("./ABS_REGIONAL_educ&employment.csv", header=TRUE)
+abs_eco=read.csv("./ABS_REGIONAL_economy&income.csv", header=TRUE)
+
+
+
+datasheet_report <- read_excel("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/datasheet-report-hc42_Loki.xlsx", 
+                               sheet = "TAB 3", col_types = c("text","text", "text", "text", "blank",
+                                                              "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric"))
+
+glimpse(datasheet_report)
+
+abs_data <- rbind(abs_eco,abs_edu,abs_famcom,abs_pop)
+#delete insignificant columns:
+abs_data <- abs_data %>% 
+  select(-c("Geography.Level","FREQUENCY","TIME","Flag.Codes","Flags")) 
+
+#rename columns for merging
+names(abs_data)[4] <- "SA3code"
+names(datasheet_report)[2] <- "SA3code"
+names(datasheet_report)[4] <- "Time"
+
+#merge by SA3 and Year
+DF = merge(abs_data,datasheet_report, by= c("SA3code", "Time"))
+View(DF)
+unique(DF$Time)
+
+
+write.csv(DF, "All abs by year.csv")
+```
+
+
+# 2. Work on ABS dataset to discover some models
+
+Dataset re-merde with correction on "year" anomalies (before there were data referred to different years in the same row). 
+Datasetname "All abs by year", 
+```{r}
+All_abs_by_year <- read_csv("~/UTS/STAT. THINKING/Groupwork_vaccination/2B_modelling/All abs by year.csv")
+unique(All_abs_by_year$Data.item) 
+```
+There are 98 different feature under "Data.item" --> extractthe most interesting ones to create new indipendent variables.
+
+Aim: extract socio-economic indicators to find possible correlations
+```{r}
+CLEAR_ABS <- spread(All_abs_by_year, Data.item, Value)
+
+CLEAR_ABS <- CLEAR_ABS %>% 
+  select(-c(1,20,21,42,57,86,88,91,18,19,34,38,39,28))
+str(CLEAR_ABS)
+```
+
+### plot to fin possible interesting correlations
+```{r}
+attach(CLEAR_ABS)
+plot(`Percent fully immunised (%)` ~ `Average number of all children in a family`)
+plot(`Percent fully immunised (%)` ~ `Australian citizen (%)`)
+plot(`Percent fully immunised (%)` ~ `Not an Australian citizen (%)`)
+
+plot(`Percent fully immunised (%)` ~ `Did not go to school (%)`)
+plot(`Percent fully immunised (%)`~ `Completed Year 10 or equivalent (%)`)
+plot(`Percent fully immunised (%)`~ `Internet accessed from dwelling (%)`)
+plot(`Percent fully immunised (%)`~ `Males - Total (no.)`)
+plot(`Percent fully immunised (%)`~ `Managers (%)`)
+plot(`Percent fully immunised (%)`~ `Married (%)`)  ##NB low values
+plot(`Percent fully immunised (%)`~ `Mean employee income ($)`)  #NB low values!
+plot(`Percent fully immunised (%)`~ `Median Age - Females (years)`)  #NB low values!
+plot(`Percent fully immunised (%)`~ `Median Age - Males (years)`)  
+plot(`Percent fully immunised (%)`~ `Persons earning $500-$999 per week (%)`)  
+plot(`Percent fully immunised (%)`~ `Persons earning $1-$499 per week (%)`)  
+plot(`Percent fully immunised (%)`~ `Persons earning $3000 or more per week (%)`)  
+plot(`Percent fully immunised (%)`~ `Total income (excl. Government pensions and allowances) ($)`) #NB low values
+plot(`Percent fully immunised (%)`~ `Total persons employed (no.)`) #NB low 
+plot(`Percent fully immunised (%)`~ `Unemployment rate (%)`) #NB low 
+
+detach(CLEAR_ABS)
+```
+
+###Prepare data: create a binary %immunisation as response vabiable
+```{r}
+CLEAR_ABS$Immu01 <- ifelse(CLEAR_ABS$`Percent fully immunised (%)` >= 95.0, 1,0)
+summary
+CLEAR_ABS$Immu01 <- factor(CLEAR_ABS$Immu01)
+table(CLEAR_ABS$Immu01)  #unbalanced datasets --> 11.5% in target
+
+#make "Time" a factor: 
+CLEAR_ABS$Time <- factor(CLEAR_ABS$Time, levels= c(2011:2016))
+str(CLEAR_ABS$Time)
+
+```
+
+Analyse boxplots using %Immu01 as output variable.
+I decided to focus on these soco-ec.indicators:
+```{r}
+boxplot_immu <- function(CLEAR_ABS,variable, label) {
+  CLEAR_ABS %>% ggplot(aes(x = Immu01, y=variable, fill=Immu01)) + geom_boxplot() + labs(y=label)
+}
+
+boxplot_immu(CLEAR_ABS,CLEAR_ABS$`Unemployment rate (%)`, "Unemployment rate")
+boxplot_immu(CLEAR_ABS,CLEAR_ABS$`Unemployment rate (%)`, "Unemployment rate")
+boxplot_immu(CLEAR_ABS,CLEAR_ABS$`Total persons employed (no.)`, "Total Employee")
+boxplot_immu(CLEAR_ABS,CLEAR_ABS$`Total income (excl. Government pensions and allowances) ($)`, "Total income")
+boxplot_immu(CLEAR_ABS,CLEAR_ABS$`Median Age - Females (years)`, "female median age")
+boxplot_immu(CLEAR_ABS,CLEAR_ABS$`Married (%)`, "marriage %")
+
+```
+Result: nothing particularly interesting, a lot of NA to manage and clean.
+
+### Logistic model
+Not significant
+```{r}
+summary(glm(Immu01 ~ `Unemployment rate (%)`+
+              `Age group` , data = CLEAR_ABS, family="binomial"))
+```
+
+
+
+
+
+# Investigate prediction on tax, phn, postcode, seifa score
+Work on dataset "Immunization with everything taxation update"
+```{r}
+ethan <- read_csv("C:/giulia/Vaccination/cleaned_data/immunization_with_everything_taxation_update.csv")
+View(ethan)
+```
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
