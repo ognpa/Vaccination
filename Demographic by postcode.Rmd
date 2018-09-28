@@ -1,0 +1,45 @@
+---
+title: "Demographics by postcode"
+author: "Giulia Grossi"
+date: "11 settembre 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Link: all SAs -->  MB(Mesh Blocks)
+
+```{r}
+library(readr)
+library(dplyr)
+MB_2016_NSW <- read_csv("raw_data/MB_2016_NSW.csv")
+View(MB_2016_NSW)
+glimpse(MB_2016_NSW)
+```
+
+
+
+## Links: MB --> postalcodes
+
+```{r}
+POA_2016_AUST <- read_csv("raw_data/POA_2016_AUST.csv")
+glimpse(POA_2016_AUST)
+
+SA3_POA <- merge(MB_2016_NSW, POA_2016_AUST, by= "MB_CODE_2016")
+glimpse(SA3_POA)
+
+```
+
+## Final dataset: SA1,SA3, postcodes in 2016
+```{r}
+SA3_POA_2016 <- SA3_POA %>% 
+  select("SA1_MAINCODE_2016","SA3_CODE_2016","POA_CODE_2016") %>% 
+  group_by(SA3_CODE_2016)
+View(SA3_POA_2016)
+glimpse(SA3_POA_2016)
+```
+
+
+

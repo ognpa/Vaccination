@@ -1,0 +1,402 @@
+---
+title: "EDA_Vaccinations"
+author: "Alex Brooks"
+date: "19 September 2018"
+output: html_document
+---
+### I would like to explore the bottom postcodes for low immun % coverage and the top postcodes for immun % coverage
+
+This task was extremely hard, as I could only identify bottom 20 postcodes and top 20 postcodes, but due to duplicates I could then only explore the bottom class of immunisation % coverage (<70% and >95%) and the top class.  
+
+
+```{r}
+#load libraries
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(Amelia)
+library(reshape2)
+```
+
+## Immport and clean data
+
+I used the merge file containing, PHN, postcode, immun%coverage, SEIFA data and electoral data. (IE, there were no demographics or taxable income data in this file)
+```{r}
+#import newly merged dataset
+immunisations_merged <- read.csv("../cleaned_data/immunization_with_everything.csv")
+str(immunisations_merged)
+```
+
+```{r}
+#check to see how it really looks - it's a mix of long and wide data
+summary(immunisations_merged)
+```
+
+1. Reduced columns names
+```{r}
+# Clean data using function 
+
+# Parameters
+# * imm_merged - the source data frame we want to clean
+
+# Returns - a data frame
+
+data <- immunisations_merged %>%
+    select('state', 'postcode', 'year', 'age',  'pc_immun', 'caution', 'pc_immun_class','PHN_code', 'PHN_number','Usual.resident.population','Index.type','Score', 'Electoral.division', 'PartyNm2016', 'PartyNm2010', 'PartyNm2013')
+
+data$age <- as.factor(data$age)
+
+str(data)
+
+```
+
+
+
+```{r}
+#Manipulate the data to get distinct PC Immun groups
+
+pc_immun_groups <- data %>%
+    group_by(pc_immun, pc_immun_class) %>%
+    summarize(count = n())
+
+pc_immun_groups
+
+```
+
+```{r}
+#Manipulate the data to get distinct age groups
+
+age_groups <- data %>%
+    group_by(age) %>%
+    summarize(count = n())
+
+age_groups
+
+```
+##Top % coverage areas versus bottom % coverage areas 
+2. I want to see the bottom postcodes for immunisation coverage and the top postcodes for immunisation coverage
+
+
+```{r}
+##creating bottom % immunisation coverage in 2016 to group, summarise and arrange
+low_pc_immun <- data %>%
+  filter(pc_immun_class < 3, pc_immun_class != 0, Index.type == "Index of Relative Socio-economic Advantage and Disadvantage", year == 2016) %>%
+  group_by(postcode, PHN_code, state, pc_immun, pc_immun_class, Usual.resident.population) %>%
+  summarize(count = n()) %>%
+  arrange(pc_immun_class, desc(Usual.resident.population))
+
+low_pc_immun
+View(low_pc_immun)
+```
+
+
+```{r}
+bottom_20_postocdes <- head(low_pc_immun, 20)
+
+bottom_20_postocdes
+#2016 results
+```
+
+```{r}
+#order and rank the top 20 in 2016
+pc_immun_ordered <- data %>%
+  group_by(postcode, PHN_code, state, pc_immun, pc_immun_class, Usual.resident.population) %>%
+  filter(pc_immun_class != 0, Index.type == "Index of Relative Socio-economic Advantage and Disadvantage", year == 2016) %>%
+  summarize(count = n()) %>%
+  arrange(desc(pc_immun_class), desc(Usual.resident.population))
+
+
+pc_immun_ordered
+View(pc_immun_ordered)
+```
+
+```{r}
+top_20_postocdes <- head(pc_immun_ordered, 20)
+
+top_20_postocdes
+```
+
+```{r}
+bottom_20_postocdes <- tail(pc_immun_ordered, 20)
+
+arrange(bottom_20_postocdes, pc_immun_class, desc(Usual.resident.population))
+```
+
+
+
+3. I want to know the mean immunisation % coverage rate across Australia in 2011 - but I also want to know what the mean immunisation% coverage rate is for each state.
+```{r}
+#filter and explore the 2011 data
+mean_immun_rate_aust_2011 <- data %>%
+    filter(year == 2011, pc_immun_class != 0)
+
+mean(mean_immun_rate_aust_2011$pc_immun_class)
+
+```
+
+```{r}
+#filter, group and summarise the 2011 data by state
+mean_immun_rate_state_2011 <- data %>%
+    filter(year == 2011) %>%
+    group_by(state) %>%
+    summarize(
+        mean = ifelse(sum(pc_immun_class[pc_immun_class != 0]) > 0, mean(pc_immun_class[pc_immun_class != 0]), 0),
+        rounded_mean = round(as.numeric(mean)),
+        pc_immun = pc_immun_groups$pc_immun[pc_immun_groups$pc_immun_class == rounded_mean],
+        total_rows = n(),
+        num_of_non_NP = sum(pc_immun_class != 0),
+        num_of_NP = sum(pc_immun_class == 0),
+        proportion_of_NP = (num_of_NP/n()))
+
+mean_immun_rate_state_2011
+
+```
+
+
+4. I want to know the mean immunisation % coverage rate across Australia in 2016 - and I want to know what the mean is for each state (even those weird doubly states we have)
+
+```{r}
+mean_immun_rate_aust_2016 <- data %>%
+    filter(year == 2016, pc_immun_class != 0)
+
+mean(mean_immun_rate_aust_2016$pc_immun_class)
+
+```
+
+```{r}
+#filter, group and summarise the 2016 data by state
+mean_immun_rate_state_2016 <- data %>%
+    filter(year == 2016) %>%
+    group_by(state) %>%
+    summarize(
+        mean = ifelse(sum(pc_immun_class[pc_immun_class != 0]) > 0, mean(pc_immun_class[pc_immun_class != 0]), 0),
+        rounded_mean = round(as.numeric(mean)),
+        pc_immun = pc_immun_groups$pc_immun[pc_immun_groups$pc_immun_class == rounded_mean],
+        total_rows = n(),
+        num_of_non_NP = sum(pc_immun_class != 0),
+        num_of_NP = sum(pc_immun_class == 0),
+        proportion_of_NP = (num_of_NP/n()))
+
+
+mean_immun_rate_state_2016
+View(mean_immun_rate_state_2016)
+```
+
+5. I want to see meaningful electorate and party in power for 2011 and 2016 - I don't know whether this would just be a smaller dataset or if we can somehow plot it???
+
+```{r}
+
+#Get info by electorate for 2016
+electorates <- data %>%
+    filter(Index.type == "Index of Relative Socio-economic Advantage and Disadvantage") %>%
+    group_by(Electoral.division, PartyNm2016, year) %>%
+    summarize(
+        mean = ifelse(sum(pc_immun_class[pc_immun_class != 0]) > 0, mean(pc_immun_class[pc_immun_class != 0]), 0),
+        rounded_mean = round(as.numeric(mean)),
+        pc_immun = pc_immun_groups$pc_immun[pc_immun_groups$pc_immun_class == rounded_mean],
+        total_rows = n(),
+        num_of_non_NP = sum(pc_immun_class != 0),
+        num_of_NP = sum(pc_immun_class == 0),
+        proportion_of_NP = (num_of_NP/n())) %>%
+    arrange(mean)
+
+```
+
+Get the electorates with the lowest 10 mean pc_immun_class scores for 2016
+```{r}
+lowest_pc_immun <- head(filter(electorates, year == 2016), 10)
+
+lowest_pc_immun
+```
+
+Get those electorate names
+```{r}
+lowest_pc_immun_names <- select(lowest_pc_immun, Electoral.division, PartyNm2016)
+lowest_pc_immun_names <- as.character(lowest_pc_immun$Electoral.division)
+
+```
+
+Let's look at postcodes in the electorates with lowest mean pc_immun_class scores
+
+```{r}
+#Get postciode level data for the lowest10 electorates in 2016
+lowest_electorates_2016 <- data %>%
+    filter(Electoral.division %in% lowest_pc_immun_names) %>%
+    select(state, year, Index.type, Electoral.division, postcode, age, pc_immun, pc_immun_class, PHN_code, Score)
+```
+
+```{r fig.height=10, fig.width=12}
+ggplot(filter(lowest_electorates_2016, Index.type == "Index of Relative Socio-economic Disadvantage"), aes(age)) +
+  geom_point(aes(y = pc_immun, size=Score, color = age), na.rm = TRUE) +
+  facet_wrap(~ year, ncol = 3, nrow = 5) +
+  labs(title="Relative Socio-economic Disadvantage Scores", subtitle = "Bottom 10 electorates in 2016: a retrospective")
+
+```
+
+```{r fig.height=10, fig.width=12}
+#OK. Let's look at postcodes in those electorates
+#Get info by electorate
+ggplot(filter(lowest_electorates_2016, Index.type == "Index of Relative Socio-economic Advantage and Disadvantage"), aes(age)) +
+  geom_point(aes(y = pc_immun, size=Score, color = age), na.rm = TRUE) +
+  facet_wrap(~ year, ncol = 3) +
+  labs(title="Relative Socio-economic Advantage and Disadvantage Scores", subtitle = "Bottom 10 electorates in 2016: a retrospective")
+
+```
+
+```{r fig.height=10, fig.width=12}
+#OK. Let's look at postcodes in those electorates
+#Get info by electorate
+ggplot(filter(lowest_electorates_2016, Index.type == "Index of Economic Resources"), aes(age)) +
+  geom_point(aes(y = pc_immun, size=Score, color = age), na.rm = TRUE) +
+  facet_wrap(~ year, ncol = 3) +
+  labs(title="Economic Resources Scores", subtitle = "Bottom 10 electorates in 2016: a retrospective")
+
+```
+
+```{r fig.height=10, fig.width=12}
+#OK. Let's look at postcodes in those electorates
+#Get info by electorate
+ggplot(filter(lowest_electorates_2016, Index.type == "Index of Education and Occupation"), aes(age)) +
+  geom_point(aes(y = pc_immun, size=Score, color = age), na.rm = TRUE) +
+  facet_wrap(~ year, ncol = 3) +
+  labs(title="Education and Occupation Scores", subtitle = "Bottom 10 electorates in 2016: a retrospective")
+
+```
+
+```{r}
+highest_pc_immun <- tail(filter(electorates, year == 2016), 10)
+
+highest_pc_immun
+```
+
+```{r}
+highest_pc_immun_names <- select(highest_pc_immun, Electoral.division, PartyNm2016)
+highest_pc_immun_names <- as.character(highest_pc_immun$Electoral.division)
+```
+
+```{r}
+#OK. Let's look at postcodes in those electorates
+#Get info by electorate
+#Get postcode level data for the highest 10 electorates in 2016
+highest_electorates_2016 <- data %>%
+    filter(Electoral.division %in% highest_pc_immun_names) %>%
+    select(state, year, Electoral.division, Index.type, postcode, age, pc_immun, pc_immun_class, PHN_code, Score)
+
+```
+
+
+```{r fig.height=10, fig.width=12}
+ggplot(filter(highest_electorates_2016, Index.type == "Index of Relative Socio-economic Disadvantage"), aes(age)) +
+  geom_point(aes(y = pc_immun, size=Score, color = age), na.rm = TRUE) +
+  facet_wrap(~ year, ncol = 3) +
+  labs(title="Relative Socio-economic Disadvantage Score", subtitle = "Top 10 highest electorates in 2016: a retrospective")
+
+```
+
+```{r fig.height=10, fig.width=12}
+#OK. Let's look at postcodes in those electorates
+#Get info by electorate
+ggplot(filter(highest_electorates_2016, Index.type == "Index of Relative Socio-economic Advantage and Disadvantage"), aes(age)) +
+  geom_point(aes(y = pc_immun, size=Score, color = age), na.rm = TRUE) +
+  facet_wrap(~ year, ncol = 3) +
+  labs(title="Relative Socio-economic Advantage and Disadvantage Scores", subtitle = "Top 10 highest electorates in 2016: a retrospective")
+
+```
+
+```{r fig.height=10, fig.width=12}
+#OK. Let's look at postcodes in those electorates
+#Get info by electorate
+ggplot(filter(highest_electorates_2016, Index.type == "Index of Economic Resources"), aes(age)) +
+  geom_point(aes(y = pc_immun, size=Score, color = age), na.rm = TRUE) +
+  facet_wrap(~ year, ncol = 3) +
+  labs(title="Economic Resources Scores", subtitle = "Top 10 highest electorates in 2016: a retrospective")
+
+```
+
+
+```{r fig.height=10, fig.width=12}
+ggplot(filter(highest_electorates_2016, Index.type == "Index of Education and Occupation"), aes(age)) +
+  geom_point(aes(y = pc_immun, size = Score, color = age), na.rm = TRUE) +
+  facet_wrap(~ year, ncol = 3) +
+  labs(title="Education and Occupation Scores", subtitle = "Top 10 highest electorates in 2016: a retrospective")
+
+```
+
+```{r}
+#Get info by 2016political party
+party_2016 <- data %>%
+    group_by(PartyNm2016) %>%
+    summarize(
+        mean = ifelse(sum(pc_immun_class[pc_immun_class != 0]) > 0, mean(pc_immun_class[pc_immun_class != 0]), 0),
+        rounded_mean = round(as.numeric(mean)),
+        pc_immun = pc_immun_groups$pc_immun[pc_immun_groups$pc_immun_class == rounded_mean],
+        total_rows = n(),
+        num_of_non_NP = sum(pc_immun_class != 0),
+        num_of_NP = sum(pc_immun_class == 0),
+        proportion_of_NP = (num_of_NP/n()))
+
+party_2016
+```
+6. I want to somehow try to map or plot the SEIFA scores for the bottom 20 and top 20 postcodes for immunisation coverage - again, this might be too ambitious
+
+
+## We know lots of postcodes are missing % immunisation coverage
+
+##There seems to be some missing electoral data too
+
+```{r}
+#GETANT TO LOOK AT IT TO PRINT OUT FOR TODAY
+#check for missing values
+
+NP_per_state <- data %>%
+  select(state, year, pc_immun_class) %>%
+  filter(pc_immun_class == 0) %>%
+  group_by(state, year) %>%
+  summarize(count = n())
+
+View(NP_per_state)
+```
+
+```{r}
+#Plot NPs per state
+ggplot(data = NP_per_state, mapping = aes(x = state,y = count, color = year))+
+         geom_point() +
+  labs(title="Not Published (NPs) counts by state per year", subtitle = "Note: 2011 had no NPs")
+```
+
+```{r}
+
+missmap(data, main = "Missing values vs observed")
+#read this to see if I should impute missing data https://www.linkedin.com/pulse/amelia-packager-missing-data-imputation-ramprakash-veluchamy/
+```
+
+```{r}
+#try plotting postcode to immun_class over the years - not very visual
+ggplot(data = data, mapping = aes(x = postcode,y = pc_immun_class, color = year))+
+         geom_point()
+```
+
+
+```{r}
+# Get % immunised counts per pc immun class for each year
+counts_by_year_merged<-data %>%
+  group_by(year, pc_immun_class) %>%
+  summarize(count = n())
+
+counts_by_year_merged$pc_immun = NA
+View(counts_by_year_merged)
+```
+
+Now try plots
+
+
+```{r}
+#plot how % immunised has changed by category between 2011 to 2016 - I would like to not have the bottom counts so cluttered on this axis
+ggplot(data = counts_by_year_merged) +
+  geom_point(mapping = aes(x=count, y=year, color=pc_immun_class))+
+  facet_wrap(~pc_immun, nrow = 2)
+
+```
+
+
+  
