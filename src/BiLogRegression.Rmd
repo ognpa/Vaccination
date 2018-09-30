@@ -1,0 +1,525 @@
+---
+title: "LogisticRegressionModels"
+author: "Alex Brooks"
+date: "29/09/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ROCR)
+library(magrittr)
+library(glmnet)
+
+```
+## Testing and iterating Model 2 that The Vaccinators built, using the seifa_merged clean dataset. 
+It contains 41,016 obersvations including: postcode, state, year, age of child immunised, pc_immun in % ranks, caution, pc_immun by 8 classes 0-8, PHN code, PHN number, Year, and a range of SEIFA scores including:
+INDEX OF EDUCATION & OCCUPATION - max, min, rank within Australia by decile, rank within Australia by percentage etc. The main variable we want to test is IEO_SCORE, which is the straight ABS 'score' per postcode of this index, derived from Census data.
+INDEX OF ECONOMIC RESOURCES - max, min, rank within Australia by decile, rank within Australia by percentage etc. The main variable we want to test is IER_SCORE, which is the straight ABS 'score' per postcode of this index, derived from Census data.
+INDEX OF DISADVANTAGE - max, min, rank within Australia by decile, rank within Australia by percentage etc. The main variable we want to test is IRSD_SCORE, which is the straight ABS 'score' per postcode of this index, derived from Census data.
+INDEX OF ADVANTAGE/DISADVANTAGE - max, min, rank within Australia by decile, rank within Australia by percentage etc. The main variable we want to test is IRSAD_SCORE, which is the straight ABS 'score' per postcode of this index, derived from Census data.
+Let's first import the data
+```{r import_data}
+raw_data <- read.csv("../cleaned_data/seifa_merged.csv")
+```
+
+We are going to be running a number of different models, so let's write some functions to make our code reusable
+
+First, let's clean and filter the data to remove NPs and also select a chosen age (1,2 or 5) or chosen year (2011-12 to 2016-17) for each model
+```{r}
+# Description
+# -----------
+# Returns a data frame filtered by a specific age and a specific year
+# Adds a column to identify whether a row has immun coverage of >=95% (high_coverage == 1) or < 95% (high_coverage == 0)
+# Finally reduce the number of fields to just those we are interested in
+
+# Parameters
+# ----------
+  # dataSet (dataframe) - data frame of raw data to filter
+  # chosen_age (integer) - age value to filter on
+  # chosen_year (integer) - year value to filter on
+  # remove_NP (boolean) - should we filter out all records with pc_immun_class of 0 (i.e. those with a pc_class of 'NP'), because something without a percentage class cannot be used to predict percentage class. Default is FALSE
+  # as_factors (boolean) - if true, convert predictors to factors (default is TRUE)
+
+# Returns - a data frame
+
+get_data <- function(dataSet, chosen_age, chosen_year, remove_NP = FALSE, as_factors = TRUE) {
+
+  if (remove_NP) {
+    output = filter(dataSet, pc_immun_class != 0)
+  } else {
+    output = dataSet
+  }
+  
+  output = output %>%
+    filter(age == chosen_age & year == chosen_year) %>%
+    mutate(high_coverage = as.factor(ifelse(pc_immun_class == 8, 1, 0))) %>%
+    select(postcode,pc_immun,IRSD_SCORE,IRSAD_SCORE,IER_SCORE,IEO_SCORE,high_coverage)
+  
+  if(as_factors) {
+    output$IRSD_SCORE = as.factor(floor(output$IRSD_SCORE))
+    output$IRSAD_SCORE = as.factor(floor(output$IRSAD_SCORE))
+    output$IER_SCORE = as.factor(floor(output$IER_SCORE))
+    output$IEO_SCORE = as.factor(floor(output$IEO_SCORE))
+  }
+
+  return(output)
+  
+}
+```
+
+Now, let's create a standard way of splitting our data into train and test splits, 80:20
+```{r test_train}
+
+# Description
+# -----------
+# Split data into random train and test sets, then add them back to a single dataframe.
+# A new column called 'is_train' indicats whether a row belongs to the training set (1) or test set (0)
+
+# Parameters
+# ----------
+  # dataSet (dataframe) - data frame of data with test and train split
+
+# Returns - a data frame
+
+train_test_set <- function(dataSet) {
+  
+  trainset_size = floor(0.8 * nrow(dataSet))
+  
+  set.seed(333)
+  
+  #this is via randomly picking observations using the sample function
+  trainset_indices = sample(seq_len(nrow(dataSet)), size = trainset_size)
+  
+  #assign observations to training and testing sets
+  trainset = dataSet[trainset_indices, ]
+  testset = dataSet[-trainset_indices, ]
+  
+  #Add a column to each data frame called 'is_train'. for training set, set it to 1, for test set, set it to 0.
+  trainset$is_train = 1
+  testset$is_train = 0
+  
+  #Bind the 2 data frames back together
+  output = rbind(trainset,testset)
+  
+  return(output)
+  
+}
+```
+
+This function will be a standard way of training a glm model, using binomial logistic regression
+```{r}
+
+# Description
+# -----------
+# Trains a glm model and returns the model.
+
+# Parameters
+# ----------
+  # dataSet (data frame) - data frame of data with test and train split
+  # model_formula (chr) - the model formula to train (in the form "target ~ predictor")
+
+# Returns - a glm model
+
+train_model <- function(dataSet, model_formula) {
+  
+  #filter just those rows that are the training set
+  trainSet = dataSet[dataSet$is_train == 1, ]
+  
+  #remove the is_train column
+  trainSet = trainSet[-ncol(trainSet)]
+  
+  #run the model
+  model = glm(formula = as.formula(model_formula),
+              data = trainSet,
+              family = "binomial")
+  
+  return(model)
+  
+}
+```
+
+We also need a standard way of calculating predictions. Note, in this instance we are not predicting 93 or 95% immunisation class so much as trying to build a model that has the ABILITY to predict the rare, high immunisation class of 95%. This is why this classification model will predict anying over 0.5% as a 1.
+
+```{r}
+# Description
+# -----------
+# Calculates predictions from a glm model and adds probabilities and predictions to the test data frame.
+
+# Parameters
+# ----------
+  # dataSet (data frame) - test set of data
+  # model (glm model) - the model used to test predictions
+
+# Returns - a data frame
+
+get_predictions <- function(dataSet, model) {
+  
+  #filter just those rows that are the test set
+  testSet = dataSet[dataSet$is_train == 0, ]
+  
+  #remove the is_train column
+  testSet = testSet[-ncol(testSet)]
+  
+  #Add the probability scores to the testSet data frame as a new column
+  testSet$probability = predict(model,
+                                newdata = remove_missing_levels(model, testSet),
+                                type = 'response')
+  
+  #only keep results without NAs
+  testSet = testSet[complete.cases(testSet), ]
+  
+  #Create the predictions. If the probability is greater than 0.5 then the prediction should be set to 1
+  testSet$prediction = 0
+  testSet[testSet$probability >= 0.5, "prediction"] = 1
+  
+  return(testSet)
+
+}
+```
+
+Now we have a way of getting predictions, we need a standard way to calculate evaluation measures
+
+```{r}
+# Description
+# -----------
+# Calculates accuracy, precision, recall and F1 scores
+
+# Parameters
+# ----------
+  # name (chr) - a descriptive name to identify the model if compared to others in a data frame (default is NA)
+  # tn (integer) - count of true negatives from a confusion matrix
+  # fp (integer) - count of false positives from a confusion matrix
+  # fn (integer) - count of false negatives from a confusion matrix
+  # tp (integer) - count of true positives from a confusion matrix
+
+# Returns - a data frame
+
+get_evaluation_measures <- function(name = NA, tn, fp, fn, tp) {
+  
+  #Just check each value has an actual value. If it doesn't, set it to 0
+  tn = ifelse(is.na(tn), 0, tn)
+  fp = ifelse(is.na(fp), 0, fp)
+  fn = ifelse(is.na(fn), 0, fn)
+  tp = ifelse(is.na(tp), 0, tp)
+  
+  accuracy = (tp+tn)/(tp+tn+fp+fn)
+  
+  precision = tp/(tp+fp)
+  
+  recall = tp/(tp+fn)
+  
+  F1 = 2 * ((precision * recall)/(precision + recall))
+  
+  output = data.frame(name, tn, fp, fn, tp, accuracy, precision, recall, F1)
+  
+  return(output)
+  
+}
+```
+
+Area under the curve gets its own function because it requires a different calculation
+
+```{r}
+# Description
+# -----------
+# Calculates area under the curve
+
+# Parameters
+# ----------
+  # probabilities - a list of probabilities
+  # targets - a list of actual values
+
+# Returns - a value (datatype of double) for area under the curve
+
+get_auc <- function(probabilities, targets) {
+  
+  probs = as.vector(probabilities)
+  
+  pred = prediction(probs,targets)
+  
+  perf_AUC = performance(pred, "auc")
+  
+  AUC = perf_AUC@y.values[[1]]
+  
+  return(AUC)
+  
+}
+
+```
+
+This function will use both of the functions above to get all the evaluation measures and put them into a data frame
+
+```{r}
+# Description
+# -----------
+# Calculates and returns model evaluation measures for test data
+
+# Parameters
+# ----------
+  # dataSet (data frame) - data frame of data with test data, predictions and probabilities
+  # name (chr) - a descriptive name to identify the model if compared to others in a data frame (default is NA)
+
+# Returns - a data frame
+
+get_evaluation_measures_table <- function(dataSet, name = NA) {
+  conf_matrix = table(pred=dataSet$prediction,true=dataSet$high_coverage)
+  conf_matrix = as.data.frame(conf_matrix)
+
+  evaluation_measures = get_evaluation_measures(name,
+                              conf_matrix$Freq[1],
+                              conf_matrix$Freq[2],
+                              conf_matrix$Freq[3],
+                              conf_matrix$Freq[4])
+
+  #Get the AUC and add it to our evaluation measures data frame
+  evaluation_measures$AUC = get_auc(dataSet$probability, dataSet$high_coverage)
+
+  return(evaluation_measures)
+  
+}
+
+```
+
+This function sets missing levels to NA where levels are only present in test data but missing in train data
+
+```{r}
+remove_missing_levels <- function(fit, test_data) {
+    
+  # drop empty factor levels in test data
+  test_data %>%
+    droplevels() %>%
+    as.data.frame() -> test_data
+    
+  # 'fit' object structure of 'lm' and 'glmmPQL' is different so we need to
+  # account for it
+  if (any(class(fit) == "glmmPQL")) {
+    # Obtain factor predictors in the model and their levels
+    factors <- (gsub("[-^0-9]|as.factor|\\(|\\)", "", names(unlist(fit$contrasts))))
+    # do nothing if no factors are present
+    if (length(factors) == 0) {
+      return(test_data)
+    }
+
+    map(fit$contrasts, function(x) names(unmatrix(x))) %>%
+      unlist() -> factor_levels
+
+    factor_levels %>% str_split(":", simplify = TRUE) %>%
+      extract(, 1) -> factor_levels
+
+    model_factors <- as.data.frame(cbind(factors, factor_levels))
+    
+  } else {
+    
+    # Obtain factor predictors in the model and their levels
+    factors <- (gsub("[-^0-9]|as.factor|\\(|\\)", "", names(unlist(fit$xlevels))))
+    # do nothing if no factors are present
+    if (length(factors) == 0) {
+      return(test_data)
+    }
+
+    factor_levels <- unname(unlist(fit$xlevels))
+    model_factors <- as.data.frame(cbind(factors, factor_levels))
+    
+  }
+
+  # Select column names in test data that are factor predictors in
+  # trained model
+  
+  predictors <- names(test_data[names(test_data) %in% factors])
+  
+  # For each factor predictor in your data, if the level is not in the model,
+  # set the value to NA
+
+  for (i in 1:length(predictors)) {
+    found <- test_data[, predictors[i]] %in% model_factors[model_factors$factors == predictors[i], ]$factor_levels
+    if (any(!found)) {
+      # track which variable
+      var <- predictors[i]
+      # set to NA
+      test_data[!found, predictors[i]] <- NA
+      # drop empty factor levels in test data
+      test_data %>%
+        droplevels() -> test_data
+      # issue warning to console
+      # message(sprintf(paste0("Setting missing levels in '%s', only present",
+       #                        " in test data but missing in train data,",
+        #                       " to 'NA'."),var))
+    }
+  }
+  return(test_data)
+  
+}
+```
+
+Now to run models for a variety of age categories and model formulae and output the evaluation measures as a data frame
+
+```{r, fig.height=10, fig.width=12}
+
+#Get the predictors we want to run models for
+predictors <- c("IRSD_SCORE", "IRSAD_SCORE", "IER_SCORE", "IEO_SCORE")
+#Get the ages we want to predict for
+ages <- c(1,2,5)
+
+#Create an empty data frame to add the results to
+glm_evaluation_measures <- data.frame()
+
+#For all the ages
+for(age in ages) {
+  
+  #Get the appriopriate filtered data and create the test/train splits
+  current_data = train_test_set(get_data(raw_data, age, 2016, TRUE, TRUE))
+  
+  #For all our predictors, train a model based on the model formula, get predictions, and calculate evaluation criteria. Finally, add them to a data frame
+  for(predictor in predictors) {
+    current_model_formula = paste("high_coverage ~",predictor)
+    current_model = train_model(current_data, current_model_formula)
+    current_predictions = get_predictions(current_data, current_model)
+    current_evaluation_measures = get_evaluation_measures_table(current_predictions, paste("Age", age, predictor))
+    glm_evaluation_measures = rbind(glm_evaluation_measures, current_evaluation_measures)
+  }
+  
+}
+
+# Take a look at the evaluation measures
+glm_evaluation_measures
+```
+
+Now let's try LASSO
+
+First, standardise the training of our LASSO models in a function
+
+```{r}
+# Description
+# -----------
+# Train a LASSO model
+
+# Parameters
+# ----------
+  # dataSet (dataframe) - data frame of data with test and train split
+
+# Returns - a LASSO model
+
+train_lasso_model <- function(dataSet) {
+  
+  #filter just those rows that are the training set
+  trainSet = dataSet[dataSet$is_train == 1, ]
+  
+  #remove the is_train column, postcode and pc_immun
+  trainSet = trainSet[,-c(1:2,8)]
+  
+  #only keep results without NAs
+  trainSet = trainSet[complete.cases(trainSet), ]
+  
+  #convert training data to matrix format
+  lasso_x = model.matrix(high_coverage~.,trainSet)
+  lasso_y = trainSet$high_coverage
+  
+  #family= binomial => logistic regression, alpha=1 => lasso
+  output = cv.glmnet(lasso_x, lasso_y, alpha=1, family="binomial", type.measure="auc")
+  
+  return(output)
+  
+}
+
+```
+
+Standardise testing our LASSO models in a function
+
+```{r}
+# Description
+# -----------
+# Test a LASSO model
+
+# Parameters
+# ----------
+  # dataSet (dataframe) - data frame of data with test and train split
+  # model - LASSO model used to test prediction
+  # lambda - the value of lambda we want to use when determining probabilities
+
+# Returns - a data frame of test data with probability and prediction columns added
+
+test_lasso_model <- function(dataSet, model, lambda) {
+  
+  #filter just those rows that are the training set
+  testSet = dataSet[dataSet$is_train == 0, ]
+  
+  #remove the is_train column, postcode and pc_immun
+  testSet = testSet[,-c(1:2,8)]
+  
+  #only keep results without NAs
+  testSet = testSet[complete.cases(testSet), ]
+  
+  #Convert test data to a model matrix
+  lasso_x_test = model.matrix(high_coverage~.,testSet)
+  
+  #Get prediction probabilities
+  lasso_prob = predict(model, newx = lasso_x_test, s=lambda, type="response")
+  
+  #translate probabilities to predictions
+  lasso_predict = rep(0,nrow(testSet))
+  
+  lasso_predict[lasso_prob>.5] <- 1
+  
+  output = data.frame(lasso_prob, lasso_predict)
+  colnames(output) = c("probability", "prediction")
+  
+  output = cbind(testSet, output)
+  
+  return(output)
+  
+}
+
+```
+
+Now, we can go through various age groups, train and test a LASSO model for each age group and add the evaluation measures to the data frame of evaluation measures for our GLM models.
+
+```{r}
+#Get the ages we want to predict for
+ages <- c(1,2,5)
+
+#Create an empty data frame to add the results too
+lasso_evaluation_measures <- data.frame()
+
+#For all the ages
+for(age in ages) {
+  
+  #Get the appriopriate filtered data )note, we dont want factors for our predictors)
+  current_data = train_test_set(get_data(raw_data, age, 2016, TRUE, FALSE))
+  
+  #Train the LASSO model
+  current_model = train_lasso_model(current_data)
+  
+  #min value of lambda
+  current_lambda_min = current_model$lambda.min
+  #best value of lambda
+  current_lambda_1se = current_model$lambda.1se
+
+  #Using lambda of 1se rather than the minimum lambda, see what predictions we get
+  current_prediction = test_lasso_model(current_data, current_model, current_lambda_1se)
+  
+  #Get all the evaluation measures
+  current_evaluation_measures = get_evaluation_measures_table(current_prediction, paste("Age", age, "LASSO"))
+  
+  #Add the evaluation measures to our evaluation measures table
+  lasso_evaluation_measures = rbind(lasso_evaluation_measures, current_evaluation_measures)
+  
+}
+```
+
+Let's look at all the evaluation measures together
+
+```{r}
+# Display the LASSO evaulation measures from all models
+lasso_evaluation_measures
+```
+
+```{r}
+# Display all the evaulation measures from all models
+all_evaluation_measure <- rbind(lasso_evaluation_measures, glm_evaluation_measures)
+
+all_evaluation_measure
+```
+

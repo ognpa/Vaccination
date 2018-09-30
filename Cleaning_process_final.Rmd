@@ -1,0 +1,83 @@
+---
+title: "Cleaning process on ABS"
+author: "Giulia Grossi"
+date: "30 settembre 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Packages upload
+```{r}
+library(readr)
+library(readxl)
+library(dplyr)
+library(ISLR)
+library(tidyr)
+```
+
+# 1. Merging ABS dataset
+Information for Bec on merging datasets of ABS _demo and socio
+```{r}
+##### merging abs_datasets #####
+setwd("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets")
+
+abs_pop <- read_csv("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/ABS_REGIONAL_pop.csv")
+abs_famcom=read.csv("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/ABS_REGIONAL_family&community.csv", header=TRUE)
+abs_edu=read.csv("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/ABS_REGIONAL_educ&employment.csv", header=TRUE)
+abs_eco=read.csv("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/ABS_REGIONAL_economy&income.csv", header=TRUE)
+
+
+
+
+datasheet_report <- read_excel("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/datasheet-report-hc42_Loki.xlsx", 
+                               sheet = "TAB 3", col_types = c("text","text", "text", "text", "blank",
+                                                              "numeric", "numeric", "numeric", 
+                                                                "numeric", "numeric"))
+
+glimpse(datasheet_report)
+
+abs_data <- rbind(abs_eco,abs_edu,abs_famcom,abs_pop)
+#delete insignificant columns:
+abs_data <- abs_data %>% 
+  select(-c("Geography.Level","FREQUENCY","TIME","Flag.Codes","Flags")) 
+
+#rename columns for merging
+names(abs_data)[4] <- "SA3code"
+names(datasheet_report)[2] <- "SA3code"
+names(datasheet_report)[4] <- "Time"
+
+#merge by SA3 and Year
+DF = merge(abs_data,datasheet_report, by= c("SA3code", "Time"))
+View(DF)
+unique(DF$Time)
+
+
+write.csv(DF, "All abs by year.csv")
+```
+
+
+# 2. Linking SA3 to postcodes(POA)
+On ABs website, downloaded 2 files:
+
+- postalcodes 2016
+- MB 2016
+
+where MB=Meah blocks, contains aggregated of all SAs and postcodes. So MB was the key to merge SA3 and POA
+
+```{r}
+MB_2016_NSW <- read_csv("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/1270055001_mb_2016_nsw_csv/MB_2016_NSW.csv")
+POA_2016_AUST <- read_csv("~/UTS/STAT. THINKING/Groupwork_vaccination/abs datasets/1270055003_poa_2016_aust_csv/POA_2016_AUST.csv")
+
+#merged together into:
+SA3_POA <- merge(MB_2016_NSW, POA_2016_AUST, by= "MB_CODE_2016" )
+SA3_POA_2016 <- SA3_POA %>% 
+  select("SA1_MAINCODE_2016","SA3_CODE_2016","POA_CODE_2016") %>% 
+  group_by(SA3_CODE_2016)
+
+
+write.csv(SA3_POA_2016, "SA3_POA_2016.csv")
+
+```
